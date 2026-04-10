@@ -284,7 +284,7 @@ public class Formatter extends CodeVisitorSupport {
             visit(receiver);
             if( inWrappedMethodChain ) {
                 incIndent();
-                if( !nextflow.script.types.Types.isNamespace(receiver.getType()) ) {
+                if( !nextflow.script.dsl.Types.isNamespace(receiver.getType()) ) {
                     appendNewLine();
                     appendIndent();
                 }
@@ -652,7 +652,7 @@ public class Formatter extends CodeVisitorSupport {
         if( isLegacyType(type) )
             append(type.getNodeMetaData(ASTNodeMarker.LEGACY_TYPE));
         else
-            append(nextflow.script.types.Types.getName(type));
+            append(nextflow.script.dsl.Types.getName(type));
     }
 
     @Override

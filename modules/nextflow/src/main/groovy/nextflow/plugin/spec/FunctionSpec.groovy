@@ -19,7 +19,7 @@ import java.lang.reflect.Method
 
 import groovy.transform.CompileStatic
 import nextflow.script.dsl.Description
-import nextflow.script.types.Types
+import nextflow.script.dsl.Types
 import org.codehaus.groovy.ast.ClassNode
 
 /**

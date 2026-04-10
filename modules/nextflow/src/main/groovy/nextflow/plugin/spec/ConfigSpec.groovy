@@ -17,7 +17,7 @@ package nextflow.plugin.spec
 
 import groovy.transform.CompileStatic
 import nextflow.config.spec.SpecNode
-import nextflow.script.types.Types
+import nextflow.script.dsl.Types
 import org.codehaus.groovy.ast.ClassNode
 
 /**
