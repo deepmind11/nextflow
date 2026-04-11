@@ -164,7 +164,7 @@ public class ScriptToGroovyVisitor extends ScriptVisitorSupport {
 
     @Override
     public void visitParams(ParamBlockNode node) {
-        var paramsType = new RecordNode("__Params");
+        var paramsType = new RecordNode(packageName(moduleNode) + "." + "__Params");
         for( var param : node.declarations ) {
             var fn = new FieldNode(
                 param.getName(),
@@ -190,6 +190,11 @@ public class ScriptToGroovyVisitor extends ScriptVisitorSupport {
         var closure = closureX(block(new VariableScope(), statements));
         var result = stmt(callThisX("params", args(classX(paramsType), closure)));
         moduleNode.addStatement(result);
+    }
+
+    private static String packageName(ScriptNode moduleNode) {
+        var scriptClass = moduleNode.getClasses().get(0);
+        return scriptClass.getNameWithoutPackage();
     }
 
     @Override
