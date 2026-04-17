@@ -84,17 +84,29 @@ class TypeHelper {
     }
 
     /**
+     * Determine whether a type is a record type.
+     *
+     * @param type
+     */
+    static boolean isRecordType(Type type) {
+        return type instanceof Class && Record.class.isAssignableFrom(type)
+    }
+
+    /**
      * Convert a value to the given type.
      *
      * @param value
      * @param type
      */
     static Object asType(Object value, Type type) {
+        if( value == null )
+            return null
+
         if( isCollectionType(type) )
             return asCollectionType(value as Collection, type)
 
-        if( type instanceof Class && Record.class.isAssignableFrom(type) )
-            return asRecordType(value as Map, type)
+        if( isRecordType(type) )
+            return asRecordType(value as Map, (Class) type)
 
         if( type == Path )
             return FileHelper.asPath(value.toString())
