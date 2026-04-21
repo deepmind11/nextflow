@@ -411,11 +411,11 @@ class ParamsDslTest extends Specification {
         def samples = runScript(
             '''\
             params {
-                samples: List<Record>
+                samples: List<Sample>
             }
 
             record Sample {
-                id: String
+                id: Integer
                 name: String
                 value: Integer
             }
@@ -454,7 +454,7 @@ class ParamsDslTest extends Specification {
             }
 
             record Sample {
-                id: String
+                id: Integer
                 name: String
                 value: Integer
             }

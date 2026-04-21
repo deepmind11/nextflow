@@ -169,8 +169,11 @@ class TypeHelper {
     private static Map<String,Field> recordFields(Class type) {
         final fields = type.getDeclaredFields()
         final result = new HashMap<String,Field>(fields.size())
-        for( final field : fields )
+        for( final field : fields ) {
+            if( field.isSynthetic() )
+                continue
             result.put(field.getName(), field)
+        }
         return result
     }
 

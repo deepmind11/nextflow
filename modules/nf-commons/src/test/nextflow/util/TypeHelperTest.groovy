@@ -17,19 +17,28 @@ package nextflow.util
 
 import java.nio.file.Path
 
+import nextflow.script.dsl.Nullable
 import nextflow.script.types.Bag
 import nextflow.script.types.Record
 import org.codehaus.groovy.runtime.typehandling.GroovyCastException
 import spock.lang.Specification
 
-class Params {
-    List<Sample> samples
-}
-
 /**
  * @author Ben Sherman <bentshermann@gmail.com>
  */
 class TypeHelperTest extends Specification {
+
+    // helper classes
+
+    static class Sample implements Record {
+        String name
+        Integer count
+        @Nullable String optional
+    }
+
+    static class Params implements Record {
+        List<Sample> samples
+    }
 
     // ---- getRawType ----
 
@@ -107,6 +116,24 @@ class TypeHelperTest extends Specification {
         result instanceof RecordMap
         result.name == 'Alice'
         result.count == 5
+    }
+
+    def 'should convert raw data structure to lists and records'() {
+        when:
+        def params = [
+            samples: [
+                [name: 'Alice', count: 3, extra: 'value']
+            ]
+        ]
+        def result = TypeHelper.asRecordType(params, Params)
+        then:
+        result instanceof RecordMap
+        result.samples instanceof List
+        result.samples[0] instanceof RecordMap
+        result.samples[0].name == 'Alice'
+        result.samples[0].count == 3
+        result.samples[0].optional == null
+        result.samples[0].extra == 'value'
     }
 
     // ---- asCollectionType ----
