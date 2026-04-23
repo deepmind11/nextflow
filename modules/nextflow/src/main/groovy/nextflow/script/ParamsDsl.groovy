@@ -142,7 +142,7 @@ class ParamsDsl {
         }
 
         if( decl.type == Path ) {
-            return FileHelper.asPath(str)
+            return TypeHelper.asPathType(str)
         }
 
         return value
@@ -161,7 +161,7 @@ class ParamsDsl {
             return resolveFromFile(decl, FileHelper.asPath(str))
 
         if( decl.type == Path )
-            return FileHelper.asPath(str)
+            return TypeHelper.asPathType(str)
 
         return value
     }

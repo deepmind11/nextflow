@@ -19,10 +19,12 @@ package nextflow.util
 import java.lang.reflect.Field
 import java.lang.reflect.ParameterizedType
 import java.lang.reflect.Type
+import java.nio.file.Files
 import java.nio.file.Path
 
 import groovy.transform.CompileStatic
 import groovy.transform.Memoized
+import nextflow.exception.AbortOperationException
 import nextflow.file.FileHelper
 import nextflow.script.dsl.Nullable
 import nextflow.script.types.Bag
@@ -109,7 +111,7 @@ class TypeHelper {
             return asRecordType(value as Map, (Class) type)
 
         if( type == Path )
-            return FileHelper.asPath(value.toString())
+            return TypeHelper.asPathType(value.toString())
 
         return DefaultTypeTransformation.castToType(value, getRawType(type))
     }
@@ -137,6 +139,13 @@ class TypeHelper {
         }
     }
 
+    static Path asPathType(String str) {
+        final result = FileHelper.asPath(str)
+        if( !Files.exists(result) )
+            throw new AbortOperationException("Input file '${str}' does not exist")
+        return result
+    }
+
     /**
      * Convert a map to a record, validating it against the given
      * record type.
@@ -144,14 +153,14 @@ class TypeHelper {
      * @param map
      * @param type
      */
-    static Object asRecordType(Map<String,?> map, Class type) {
+    static Record asRecordType(Map<String,?> map, Class type) {
         final fields = recordFields(type)
 
         for( final field : fields.values() ) {
             if( field.isAnnotationPresent(Nullable.class) )
                 continue
             if( map.get(field.getName()) == null )
-                throw new GroovyCastException(map, type)
+                throw new AbortOperationException("Input record ${map} is missing field '${field.getName()}' required by record type '${type.getSimpleName()}'")
         }
 
         final result = new HashMap<String,Object>(map.size())

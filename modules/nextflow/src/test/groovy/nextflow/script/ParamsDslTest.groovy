@@ -20,8 +20,9 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 import nextflow.Session
-import nextflow.file.FileHelper
+import nextflow.exception.AbortOperationException
 import nextflow.exception.ScriptRuntimeException
+import nextflow.file.FileHelper
 import nextflow.script.types.Bag
 import nextflow.script.types.Record
 import spock.lang.Specification
@@ -36,7 +37,8 @@ class ParamsDslTest extends Specification {
 
     def 'should declare workflow params with CLI overrides'() {
         given:
-        def cliParams = [input: './data', chunk_size: '3']
+        def inputFile = Files.createTempFile('test', '.csv')
+        def cliParams = [input: inputFile.toString(), chunk_size: '3']
         def configParams = [outdir: 'results']
 
         when:
@@ -55,7 +57,10 @@ class ParamsDslTest extends Specification {
             configParams: configParams
         )
         then:
-        result == [input: FileHelper.asPath('./data'), chunk_size: 3, save_intermeds: false, outdir: 'results']
+        result == [input: inputFile, chunk_size: 3, save_intermeds: false, outdir: 'results']
+
+        cleanup:
+        inputFile?.delete()
     }
 
     def 'should allow optional param'() {
@@ -121,14 +126,13 @@ class ParamsDslTest extends Specification {
 
     def 'should report error for invalid type'() {
         given:
-        def cliParams = [input: './data', save_intermeds: 42]
+        def cliParams = [save_intermeds: 42]
         def configParams = [:]
 
         when:
         runScript(
             '''\
             params {
-                input: Path
                 save_intermeds: Boolean
             }
 
@@ -140,6 +144,28 @@ class ParamsDslTest extends Specification {
         then:
         def e = thrown(ScriptRuntimeException)
         e.message == 'Parameter `save_intermeds` with type Boolean cannot be assigned to 42 [Integer]'
+    }
+
+    def 'should report error for missing input file'() {
+        given:
+        def cliParams = [input: 'input.csv']
+        def configParams = [:]
+
+        when:
+        runScript(
+            '''\
+            params {
+                input: Path
+            }
+
+            workflow { params }
+            ''',
+            params: cliParams,
+            configParams: configParams
+        )
+        then:
+        def e = thrown(AbortOperationException)
+        e.message == "Input file 'input.csv' does not exist"
     }
 
     @Unroll
@@ -467,8 +493,8 @@ class ParamsDslTest extends Specification {
         )
 
         then:
-        def e = thrown(ScriptRuntimeException)
-        e.message.contains('Parameter `samples` with type List<Sample> cannot be assigned to contents of')
+        def e = thrown(AbortOperationException)
+        e.message == "Input record [id:1, name:sample1] is missing field 'value' required by record type 'Sample'"
 
         cleanup:
         inputFile?.delete()
