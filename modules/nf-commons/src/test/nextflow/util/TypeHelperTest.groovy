@@ -15,8 +15,10 @@
  */
 package nextflow.util
 
+import java.nio.file.Files
 import java.nio.file.Path
 
+import nextflow.exception.AbortOperationException
 import nextflow.script.dsl.Nullable
 import nextflow.script.types.Bag
 import nextflow.script.types.Record
@@ -87,6 +89,9 @@ class TypeHelperTest extends Specification {
     // ---- asType ----
 
     def 'should convert raw value to target type'() {
+        given:
+        def inputFile = Files.createTempFile('test', '.txt')
+
         expect: 'primitive type'
         TypeHelper.asType(null, String) == null
         TypeHelper.asType('42', String) == '42'
@@ -105,10 +110,10 @@ class TypeHelperTest extends Specification {
         result == [1, 2] as Set
 
         when: 'path type'
-        result = TypeHelper.asType('/tmp/test.txt', Path)
+        result = TypeHelper.asType(inputFile.toString(), Path)
         then:
         result instanceof Path
-        result.toString() == '/tmp/test.txt'
+        result == inputFile
 
         when: 'record type'
         result = TypeHelper.asType([name: 'Alice', count: 5], Sample)
@@ -116,6 +121,9 @@ class TypeHelperTest extends Specification {
         result instanceof RecordMap
         result.name == 'Alice'
         result.count == 5
+
+        cleanup:
+        inputFile?.delete()
     }
 
     def 'should convert raw data structure to lists and records'() {
@@ -184,18 +192,18 @@ class TypeHelperTest extends Specification {
         result.extra == 'value'
     }
 
-    def 'should throw GroovyCastException when a required field is null'() {
+    def 'should report error when a required field is null'() {
         when:
         TypeHelper.asRecordType([name: null, count: 5], Sample)
         then:
-        thrown(GroovyCastException)
+        thrown(AbortOperationException)
     }
 
-    def 'should throw GroovyCastException when a required field is absent'() {
+    def 'should report error when a required field is absent'() {
         when:
         TypeHelper.asRecordType([name: 'Alice'], Sample)
         then:
-        thrown(GroovyCastException)
+        thrown(AbortOperationException)
     }
 
 }

@@ -139,6 +139,12 @@ class TypeHelper {
         }
     }
 
+    /**
+     * Convert a string representing a file path to a Path.
+     * Report an error if the path does not exist.
+     *
+     * @param str
+     */
     static Path asPathType(String str) {
         final result = FileHelper.asPath(str)
         if( !Files.exists(result) )
