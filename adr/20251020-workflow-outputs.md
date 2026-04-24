@@ -191,46 +191,74 @@ While this approach is less verbose, it breaks the modularity of processes and s
 
 On the other hand, propagating all workflow outputs to the top will make pipelines more verbose, especially when using "skinny tuple" channels. This issue will be alleviated by migrating from tuples to records -- for this reason, it is recommended that large pipelines be migrated to records before being migrated to workflow outputs.
 
-### Defining params and outputs in the entry workflow
+### Inferring params and outputs from a named workflow
 
-An alternative syntax, for both pipeline params and outputs, would be to define them as sections in the entry workflow:
+Consider the following entry workflow which simply wraps a named workflow:
 
 ```groovy
-workflow {
-    params:
+params {
     samples: List<Sample>
+    index: Path
+}
 
+workflow {
     main:
     ch_samples = channel.fromList(samples)
-    ch_aligned = ALIGN(ch_samples)
-    multiqc_report = MULTIQC(ch_aligned.collect())
+    rnaseq = RNASEQ(ch_samples, index)
 
     publish:
-    aligned: Channel<AlignedSample> = ch_aligned {
+    aligned = rnaseq.aligned
+    multiqc_report = rnaseq.multiqc_report
+}
+
+output {
+    aligned: Channel<AlignedSample> {
         path { s -> /* ... */ }
         index { path 'aligned.json' }
     }
-    multiqc_report: Path = multiqc_report {
+    multiqc_report: Path {
         path '.'
     }
 }
 ```
 
-In this example, the `params:` and `publish:` sections mirror the `take:` and `emit:` sections in a subworkflow. In fact, it could even be possible to infer an entry workflow for a subworkflow, such that subworkflows could be executed directly. In that case, entry workflows, the `params` block, and the `output` block would no longer be needed because they could be rewritten as subworkflows.
+Where the `RNASEQ` workflow is defined as follows:
 
-It may be possible to infer pipeline inputs/outputs from subworkflow takes/emits. They have the same basic structure and use the same types. Pipeline inputs/outputs do have an additional purpose -- they specify how to translate between Nextflow and the external world -- but much of this translation could be inferred automatically, especially with record types.
+```groovy
+workflow RNASEQ {
+    take:
+    ch_samples: Channel<Sample>
+    index: Path
 
-- An input can translate an index file (e.g. CSV, JSON, or YAML file) to a channel of tuples/records.
-- An output can translate a channel of tuples/records to an index file.
-- Record types specify which fields are required or optional, and whether a raw string represents a file path (`Path` type) or just a string value (`String` type).
+    main:
+    ch_aligned = ALIGN(ch_samples, index)
+    multiqc_report = MULTIQC(ch_aligned.collect())
 
-The only remaining gap is the output files, which must be organized into a directory tree. There is no obvious way to infer such a directory tree from the channel itself. Even if there were an obvious mapping (e.g. treating a record as a directory tree), it might not be what the pipeline developer wants. The needs of the output directory don't necessarily match the needs of the workflow logic (e.g. interactive file browsing vs parallel processing).
+    emit:
+    aligned: Channel<AlignedSample> = ch_aligned
+    multiqc_report: Path = multiqc_report
+}
 
-This mapping is what the output `path` directive provides, and it is the reason why a pipeline output cannot be inferred from a workflow emit. Specifying this behavior in a separate `output` block is cleaner and easier to read than embedding it in the entry workflow alongside dataflow logic.
+record Sample { /* ... */ }
+record AlignedSample { /* ... */ }
+```
 
-In the future, it may be possible to abstract the directory view entirely in favor of a structured view (i.e. index files). In practice, users and developers still prefer to browse directories and control how they are organized, so the `path` directive remains necessary. If this convention ever changes, we might be able to replace the `params` / `workflow` / `output` trio with a subworkflow and simplify the language.
+This example demonstrates that most of the `params` / `workflow` / `output` trio can be equivalently expressed by a named workflow: the `params` block mirrors the `take:` section, and the `output` block and `publish:` section together mirror the `emit:` section.
+
+Named workflows typically consume and produce channels so that they can be composed into larger pipelines. But this prevents them from being directly executable -- the purpose of an entry workflow is to translate between dataflow logic and the external world. If this translation could be inferred automatically, it would allow a named workflow to be both executable and composable, eliminating the need to define explicit entry workflows.
+
+Given a named workflow with dataflow inputs and outputs, the following capabilities would be needed to execute it directly:
+
+- Loading an input channel (e.g. channel of records) from an index file (e.g. CSV, JSON, or YAML file)
+- Saving an output channel (e.g. channel of records) as an index file
+- Publishing output files to a permanent location
+
+Channels can be automatically translated to/from index files using record types. However, the output directory structure cannot be automatically inferred. It is normally specified by the output `path` directive, and need not correspond at all to the structure of output channels.
+
+One solution is to not create an output directory at all. The workflow outputs provide a structured view of the output files, so this can be used by an external system (e.g. Seqera Platform) to provide a user interface. The output files can simply remain where they are produced, instead of being copied to a separate location. The work directory will likely need to be a global persistent data store, which implies global caching, automatic cleanup, and global search.
 
 ## Links
 
 - Community issues: [#4042](https://github.com/nextflow-io/nextflow/issues/4042), [#4661](https://github.com/nextflow-io/nextflow/issues/4661), [#4670](https://github.com/nextflow-io/nextflow/issues/4670)
+- [Workflow params ADR](./20250825-workflow-params.md)
 - [Record types ADR](./20260306-record-types.md)

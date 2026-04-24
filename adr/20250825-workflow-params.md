@@ -111,7 +111,7 @@ A parameter with a collection type (`List`, `Set`, `Bag`) can be supplied as a f
 
 ```groovy
 params {
-    samples: List<Sample>   // can be supplied as samples.csv, samples.json, or samples.yaml
+    samples: List<Sample>   // can be supplied as a CSV, JSON, or YAML file path
 }
 
 record Sample {
@@ -233,6 +233,8 @@ Any parameter supplied via command line or params file must be declared in the s
 ## Links
 
 - Community issue: [#4669](https://github.com/nextflow-io/nextflow/issues/4669)
+- [Workflow outputs ADR](./20251020-workflow-outputs.md)
+- [Record types ADR](./20260306-record-types.md)
 
 ## Appendix
 
@@ -263,3 +265,80 @@ For example, when loading a JSON file as a collection of records, Nextflow uses 
 - If a JSON object is missing a record field that is marked as nullable, it is considered valid
 
 While type annotations are used only at compile-time in all other contexts, they are needed at runtime for pipeline parameters in order to validate and convert external input data to the expected type.
+
+### Standard library functions for loading structured files
+
+The automatic loading of samplesheet inputs is supported only in the `params` block. It could also be useful to load structured files with functions. For example:
+
+```groovy
+samples = fromJson('samples.json')
+```
+
+Where `fromJson` is a function that loads arbitrary data from a JSON file.
+
+A function is more flexible because it can be used anywhere in pipeline code, whereas the automatic samplesheet loading can only be used for pipeline-level inputs. For example, a process might produce a JSON file that needs to be read in workflow logic and processed by downstream tasks in parallel.
+
+However, data-loading functions like `fromJson` cannot be statically typed, since the data file could contain anything (number, string, list, map, etc). Primitive values can be coerced using a Groovy-style cast (e.g. `fromJson('...') as Map`), but this approach does not support parameterized types or Nextflow record types. A function like `fromJson` also assumes a specific file format, which is overly restrictive for a pipeline-level input that could be supplied in a variety of formats.
+
+Loading structured files with a typed parameter such as `samples: List<Sample>` allows the input to have a well-defined type at compile-time and allows it to be sourced from any data format. While currently only CSV, JSON, and YAML are supported, the format can be made extensible in the future so that users can integrate their own data formats (e.g. Parquet) via plugins. Data-loading functions like `fromJson` can also be implemented for other use cases in the future, but they are not sufficient for handling pipeline-level inputs.
+
+### Typed parameters and schemas
+
+While this ADR does not specify any native integration with JSON schema, it is worth addressing how typed parameters are expected to interact with schemas in the future.
+
+A common approach for Nextflow pipelines is to define a JSON schema for the pipeline parameters. A samplesheet param is typically defined as a file input with its own *samplesheet schema*. Developers typically load and validate samplesheet params using the `samplesheetToList` function from the `nf-schema` plugin:
+
+```groovy
+include { samplesheetToList } from 'plugin/nf-schema'
+
+params.input = null
+
+workflow {
+    samples = samplesheetToList(params.input, "assets/schema_input.json")
+    channel.fromList(samples).view()
+}
+```
+
+The parameter schema provides similar validation and type coercion as a typed parameter. For example, the following record type:
+
+```groovy
+record Sample {
+    id: String
+    fastq_1: Path
+    fastq_2: Path?
+}
+```
+
+Is equivalent to the following JSON schema:
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "id": { "type": "string" },
+      "fastq_1": { "type": "string", "format": "file-path", "exists": true },
+      "fastq_2": { "type": "string", "format": "file-path", "exists": true }
+    },
+    "required": ["id", "fastq_1"]
+  }
+}
+```
+
+The `samplesheetToList` function has the same limitation as `fromJson` described above -- it is not statically typed. Even with the schema file, the type checker cannot guarantee a specific return type at compile-time because there is no type annotation. The above example must be rewritten as follows in order to be statically typed:
+
+```groovy
+params {
+    input: List<Sample>
+}
+
+workflow {
+    channel.fromList(params.input).view()
+}
+```
+
+On the other hand, the samplesheet schema can specify additional validations that cannot be expressed with Nextflow types, such as min/max constraints for numbers and pattern constraints for strings.
+
+It is not yet clear whether it is better for Nextflow to enforce these schema properties at runtime, or for users to implement the equivalent validation in their pipeline code. If needed, Nextflow should be able to augment the `params` block with the parameter schema to provide this extra validation. The above example would work without any additional code changes.
